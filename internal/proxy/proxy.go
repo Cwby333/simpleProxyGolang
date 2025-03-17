@@ -9,8 +9,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Cwby333/simpleProxyGolang/internal/limiter"
 	"github.com/google/uuid"
 )
+
+func limiterMiddleware(limiter *limiter.Limiter) func (next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			err := limiter.Allow(r.RemoteAddr)
+	
+			if err != nil {
+				w.Write([]byte("Repeat a few minutes"))
+				return
+			}
+	
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
 type Proxy struct {
 	mu sync.RWMutex
@@ -104,10 +121,10 @@ func (p *Proxy) proxyHandle(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func (p *Proxy) StartServer() error {
+func (p *Proxy) StartServer(ctx context.Context) error {
 	mux := http.NewServeMux()
 
-	mux.Handle("/", http.HandlerFunc(p.proxyHandle))
+	mux.Handle("/", limiterMiddleware(limiter.New(ctx, 10, 50, time.Second * 5))(http.HandlerFunc(p.proxyHandle)))
 
 	p.server.Handler = mux
 

@@ -40,7 +40,7 @@ func main() {
 
 	group.Go(func() error {
 		slog.Info("start server")
-		return proxy.StartServer()
+		return proxy.StartServer(ctx)
 	})
 
 	group.Go(func() error {
