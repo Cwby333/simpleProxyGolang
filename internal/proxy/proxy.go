@@ -13,33 +13,33 @@ import (
 	"github.com/google/uuid"
 )
 
-func limiterMiddleware(limiter *limiter.Limiter) func (next http.Handler) http.Handler {
+func limiterMiddleware(limiter *limiter.Limiter) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		
+
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			err := limiter.Allow(r.RemoteAddr)
-	
+
 			if err != nil {
 				w.Write([]byte("Repeat a few minutes"))
 				return
 			}
-	
+
 			next.ServeHTTP(w, r)
 		})
 	}
 }
 
 type Proxy struct {
-	mu sync.RWMutex
-	counter int
+	mu        sync.RWMutex
+	counter   int
 	addresses []string
-	
+
 	server http.Server
 }
 
 func New(addresses []string, address string) *Proxy {
 	return &Proxy{
-		mu: sync.RWMutex{},
+		mu:        sync.RWMutex{},
 		addresses: addresses,
 		server: http.Server{
 			Addr: address,
@@ -48,15 +48,15 @@ func New(addresses []string, address string) *Proxy {
 }
 
 func (p *Proxy) proxyHandle(w http.ResponseWriter, r *http.Request) {
-	requestID := uuid.NewString() 	
+	requestID := uuid.NewString()
 	t := time.Now()
-	defer func ()  {
-		slog.Info("duration request", 
-		slog.String("duration", time.Since(t).String()), slog.String("requestID", requestID))
+	defer func() {
+		slog.Info("duration request",
+			slog.String("duration", time.Since(t).String()), slog.String("requestID", requestID))
 	}()
 
 	slog.Info(
-		"proxy", 
+		"proxy",
 		slog.String("method", r.Method),
 		slog.String("path", r.URL.Path),
 		slog.String("protocol", r.Proto),
@@ -82,9 +82,9 @@ func (p *Proxy) proxyHandle(w http.ResponseWriter, r *http.Request) {
 	p.mu.RUnlock()
 
 	m := r.Header.Clone()
-	
-	req ,err := http.NewRequest(
-		r.Method, 
+
+	req, err := http.NewRequest(
+		r.Method,
 		fmt.Sprintf("http://%s%s", address, r.URL), r.Body,
 	)
 	if err != nil {
@@ -96,7 +96,7 @@ func (p *Proxy) proxyHandle(w http.ResponseWriter, r *http.Request) {
 	req.Header.Add("X-REQUEST-ID", requestID)
 
 	client := http.Client{}
-	
+
 	response, err := client.Do(req)
 	if err != nil {
 		slog.Error(err.Error())
@@ -124,7 +124,7 @@ func (p *Proxy) proxyHandle(w http.ResponseWriter, r *http.Request) {
 func (p *Proxy) StartServer(ctx context.Context) error {
 	mux := http.NewServeMux()
 
-	mux.Handle("/", limiterMiddleware(limiter.New(ctx, 10, 50, time.Second * 5))(http.HandlerFunc(p.proxyHandle)))
+	mux.Handle("/", limiterMiddleware(limiter.New(ctx, 10, 50, time.Second*5))(http.HandlerFunc(p.proxyHandle)))
 
 	p.server.Handler = mux
 

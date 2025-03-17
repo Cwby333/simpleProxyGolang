@@ -30,8 +30,8 @@ func main() {
 	signalChan := make(chan os.Signal, 2)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
-	go func ()  {
-		sig := <- signalChan
+	go func() {
+		sig := <-signalChan
 		slog.Info("signal received", slog.String("signal", sig.String()))
 		cancel()
 	}()
@@ -44,8 +44,8 @@ func main() {
 	})
 
 	group.Go(func() error {
-		<- gctx.Done()
-		
+		<-gctx.Done()
+
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeoutShutdown)
 		defer cancel()
 
